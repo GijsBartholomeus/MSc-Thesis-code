@@ -1,0 +1,36 @@
+{
+  "parameter_names": [
+    "k1_aa_over_CT",
+    "k3_CT",
+    "k4",
+    "k4prime",
+    "k6",
+    "k7"
+  ],
+  "walks": [
+    {
+      "walk": 1,
+      "initial_eigenvalue": 7.577259858547333e-09,
+      "completed_steps": 250,
+      "stop_reason": null
+    },
+    {
+      "walk": 2,
+      "initial_eigenvalue": 0.0001353205728742161,
+      "completed_steps": 250,
+      "stop_reason": null
+    },
+    {
+      "walk": 3,
+      "initial_eigenvalue": 0.00027433179787774364,
+      "completed_steps": 250,
+      "stop_reason": null
+    },
+    {
+      "walk": 4,
+      "initial_eigenvalue": 0.0003544283372667308,
+      "completed_steps": 250,
+      "stop_reason": null
+    }
+  ]
+}
