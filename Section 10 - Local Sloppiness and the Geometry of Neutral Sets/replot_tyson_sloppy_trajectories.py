@@ -103,6 +103,41 @@ def plot_global_walks(log_walks: list[np.ndarray], outdir: Path) -> tuple[int, i
     return top3
 
 
+def plot_global_pca(log_walks: list[np.ndarray], outdir: Path) -> np.ndarray:
+    """Plot all walks in one PCA basis fitted to the combined log-parameter paths."""
+    stacked = np.concatenate(log_walks, axis=0)
+    centre = stacked.mean(axis=0)
+    _, singular_values, components = np.linalg.svd(stacked - centre, full_matrices=False)
+    explained = singular_values**2 / np.sum(singular_values**2)
+    projected = [(walk - centre) @ components[:3].T for walk in log_walks]
+    all_coords = np.concatenate(projected, axis=0)
+    norm = Normalize(0, max(len(walk) - 1 for walk in log_walks))
+
+    fig = plt.figure(figsize=(7.15, 5.35))
+    ax = fig.add_subplot(111, projection="3d")
+    for mode, coords in enumerate(projected, start=1):
+        draw_progressive_path(ax, coords, norm)
+        ax.text(*coords[-1], f"  {mode}", color="#9f2928", fontsize=8.5, weight="bold")
+
+    wt = projected[0][0]
+    ax.text(*wt, "  WT", color="#171717", fontsize=8, weight="bold")
+    for axis, index in zip((ax.set_xlabel, ax.set_ylabel, ax.set_zlabel), range(3)):
+        axis(f"PC{index + 1} ({100 * explained[index]:.1f}%)", fontsize=9, labelpad=5)
+    ax.set_xlim(*padded_limits(all_coords[:, 0]))
+    ax.set_ylim(*padded_limits(all_coords[:, 1]))
+    ax.set_zlim(*padded_limits(all_coords[:, 2]))
+    ax.set_box_aspect((1.28, 1.0, 0.92))
+    ax.view_init(elev=23, azim=-57)
+    style_3d_axis(ax)
+
+    add_step_colorbar(fig, norm, [0.30, 0.055, 0.40, 0.024])
+    fig.subplots_adjust(left=0.01, right=0.97, bottom=0.13, top=0.99)
+    for suffix in ("png", "pdf"):
+        fig.savefig(outdir / f"tyson_sloppy_walks_global_pca3d.{suffix}", dpi=300 if suffix == "png" else None, bbox_inches="tight")
+    plt.close(fig)
+    return explained
+
+
 def plot_four_views(log_walks: list[np.ndarray], summary: dict, outdir: Path) -> None:
     """Detailed per-walk projections for the appendix, with one shared colorbar."""
     norm = Normalize(0, max(len(walk) - 1 for walk in log_walks))
@@ -146,8 +181,10 @@ def main() -> None:
     summary = json.loads(args.summary.read_text(encoding="utf-8"))
     log_walks = [np.asarray(data[f"walk_{i}_log_parameters"]) for i in range(len(summary["walks"]))]
     top3 = plot_global_walks(log_walks, args.outdir)
+    explained = plot_global_pca(log_walks, args.outdir)
     plot_four_views(log_walks, summary, args.outdir)
     print("Global axes:", ", ".join(PARAM_NAMES[i] for i in top3))
+    print("PCA explained variance:", ", ".join(f"PC{i + 1}={100 * value:.2f}%" for i, value in enumerate(explained[:3])))
 
 
 if __name__ == "__main__":
