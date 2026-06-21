@@ -222,6 +222,50 @@ def plot_saved_phenotypes(
     plt.close(fig)
 
 
+def plot_saved_single_phenotype(
+    data,
+    outdir: Path,
+    walk_index: int = 1,
+    observable: str = "M",
+    final_step: int = 250,
+    snapshot_count: int = 9,
+) -> None:
+    """Create a large standalone output panel for one saved sloppy walk."""
+    t_eval = np.asarray(data["t"])
+    trajectories = np.asarray(data[f"walk_{walk_index}_{observable}"])
+    end = min(final_step, trajectories.shape[0] - 1)
+    snapshot_idx = np.unique(
+        np.round(np.linspace(0, end, min(snapshot_count, end + 1))).astype(int)
+    )
+    middle_idx = [index for index in snapshot_idx if index not in (0, end)]
+    color = "#9C6BC7"
+    label = "active cdc2-cyclin / CT" if observable == "M" else "total cyclin / CT"
+
+    fig, ax = plt.subplots(figsize=(7.2, 4.35))
+    for rank, index in enumerate(middle_idx):
+        shade = 0.80 - 0.40 * (rank / max(len(middle_idx) - 1, 1))
+        ax.plot(t_eval, trajectories[index], color=str(shade), lw=1.2, alpha=0.95, zorder=1)
+    ax.plot(t_eval, trajectories[0], color="#111111", lw=2.1, zorder=3)
+    ax.plot(t_eval, trajectories[end], color=color, lw=2.3, zorder=4)
+    ax.set_xlabel("time", fontsize=10)
+    ax.set_ylabel(label, fontsize=10)
+    ax.grid(True, color="#d8dadd", alpha=0.65, linewidth=0.7)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.tick_params(labelsize=9)
+    handles = [
+        plt.Line2D([0], [0], color="#111111", lw=2.1, label="start"),
+        plt.Line2D([0], [0], color="#777777", lw=1.2, label="intermediate"),
+        plt.Line2D([0], [0], color=color, lw=2.3, label=f"step {end}"),
+    ]
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.12), ncol=3, frameon=False, fontsize=9)
+    fig.tight_layout()
+    stem = f"tyson_sloppy_walk_dir{walk_index + 1}_{observable.lower()}_step{end}_large"
+    for suffix in ("png", "pdf"):
+        fig.savefig(outdir / f"{stem}.{suffix}", dpi=300 if suffix == "png" else None, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=Path, required=True)
@@ -237,6 +281,7 @@ def main() -> None:
     explained = plot_global_pca(log_walks, args.outdir)
     plot_four_views(log_walks, summary, args.outdir)
     plot_saved_phenotypes(data, len(summary["walks"]), args.outdir, observable="YT", final_step=50)
+    plot_saved_single_phenotype(data, args.outdir, walk_index=1, observable="M", final_step=250)
     print("Global axes:", ", ".join(PARAM_NAMES[i] for i in top3))
     print("PCA explained variance:", ", ".join(f"PC{i + 1}={100 * value:.2f}%" for i, value in enumerate(explained[:3])))
 
