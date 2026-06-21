@@ -169,6 +169,59 @@ def plot_four_views(log_walks: list[np.ndarray], summary: dict, outdir: Path) ->
     plt.close(fig)
 
 
+def plot_saved_phenotypes(
+    data,
+    walk_count: int,
+    outdir: Path,
+    observable: str = "YT",
+    final_step: int = 50,
+    snapshot_count: int = 7,
+) -> None:
+    """Plot saved output trajectories without rerunning the ODE or sloppy walks."""
+    t_eval = np.asarray(data["t"])
+    label = "active cdc2-cyclin / CT" if observable == "M" else "total cyclin / CT"
+    colors = ["#4C78A8", "#9C6BC7", "#59A14F", "#E15759"]
+    fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.0), sharex=True, sharey=True)
+
+    for walk_index, (ax, color) in enumerate(zip(axes.ravel(), colors)):
+        trajectories = np.asarray(data[f"walk_{walk_index}_{observable}"])
+        end = min(final_step, trajectories.shape[0] - 1)
+        snapshot_idx = np.unique(
+            np.round(np.linspace(0, end, min(snapshot_count, end + 1))).astype(int)
+        )
+        middle_idx = [index for index in snapshot_idx if index not in (0, end)]
+        for rank, index in enumerate(middle_idx):
+            shade = 0.78 - 0.35 * (rank / max(len(middle_idx) - 1, 1))
+            ax.plot(t_eval, trajectories[index], color=str(shade), lw=1.0, alpha=0.95, zorder=1)
+        ax.plot(t_eval, trajectories[0], color="#111111", lw=1.7, zorder=3)
+        ax.plot(t_eval, trajectories[end], color=color, lw=1.9, zorder=4)
+        ax.text(0.03, 0.93, chr(97 + walk_index), transform=ax.transAxes, fontsize=10, weight="bold")
+        ax.text(
+            0.97, 0.93, f"dir {walk_index + 1}", transform=ax.transAxes,
+            fontsize=8, ha="right", va="top", color="#444444",
+        )
+        ax.grid(True, color="#d8dadd", alpha=0.65, linewidth=0.65)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.tick_params(labelsize=8)
+
+    for ax in axes[-1, :]:
+        ax.set_xlabel("time", fontsize=9)
+    for ax in axes[:, 0]:
+        ax.set_ylabel(label, fontsize=9)
+    handles = [
+        plt.Line2D([0], [0], color="#111111", lw=1.7, label="start"),
+        plt.Line2D([0], [0], color="#777777", lw=1.0, label="intermediate"),
+        plt.Line2D([0], [0], color=colors[0], lw=1.9, label=f"step {final_step}"),
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False, bbox_to_anchor=(0.5, 1.02), fontsize=8)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    stem = f"tyson_sloppy_walk_{observable.lower()}_phenotypes_step{final_step}"
+    for suffix in ("png", "pdf"):
+        fig.savefig(outdir / f"{stem}.{suffix}", dpi=300 if suffix == "png" else None, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=Path, required=True)
@@ -183,6 +236,7 @@ def main() -> None:
     top3 = plot_global_walks(log_walks, args.outdir)
     explained = plot_global_pca(log_walks, args.outdir)
     plot_four_views(log_walks, summary, args.outdir)
+    plot_saved_phenotypes(data, len(summary["walks"]), args.outdir, observable="YT", final_step=50)
     print("Global axes:", ", ".join(PARAM_NAMES[i] for i in top3))
     print("PCA explained variance:", ", ".join(f"PC{i + 1}={100 * value:.2f}%" for i, value in enumerate(explained[:3])))
 
