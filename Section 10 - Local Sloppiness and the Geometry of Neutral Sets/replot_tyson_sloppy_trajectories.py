@@ -176,10 +176,11 @@ def plot_saved_phenotypes(
     observable: str = "YT",
     final_step: int = 50,
     snapshot_count: int = 7,
+    endpoint_label: str | None = None,
 ) -> None:
     """Plot saved output trajectories without rerunning the ODE or sloppy walks."""
     t_eval = np.asarray(data["t"])
-    label = "active cdc2-cyclin / CT" if observable == "M" else "total cyclin / CT"
+    label = "active cdc2-cyclin / CT" if observable == "M" else "YT / CT"
     colors = ["#4C78A8", "#9C6BC7", "#59A14F", "#E15759"]
     fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.0), sharex=True, sharey=True)
 
@@ -212,7 +213,10 @@ def plot_saved_phenotypes(
     handles = [
         plt.Line2D([0], [0], color="#111111", lw=1.7, label="start"),
         plt.Line2D([0], [0], color="#777777", lw=1.0, label="intermediate"),
-        plt.Line2D([0], [0], color=colors[0], lw=1.9, label=f"step {final_step}"),
+        plt.Line2D(
+            [0], [0], color=colors[0], lw=1.9,
+            label=endpoint_label if endpoint_label is not None else f"step {final_step}",
+        ),
     ]
     fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False, bbox_to_anchor=(0.5, 1.02), fontsize=8)
     fig.tight_layout(rect=(0, 0, 1, 0.97))
@@ -229,6 +233,8 @@ def plot_saved_single_phenotype(
     observable: str = "M",
     final_step: int = 250,
     snapshot_count: int = 9,
+    endpoint_label: str | None = None,
+    color: str = "#E15759",
 ) -> None:
     """Create a large standalone output panel for one saved sloppy walk."""
     t_eval = np.asarray(data["t"])
@@ -238,8 +244,7 @@ def plot_saved_single_phenotype(
         np.round(np.linspace(0, end, min(snapshot_count, end + 1))).astype(int)
     )
     middle_idx = [index for index in snapshot_idx if index not in (0, end)]
-    color = "#9C6BC7"
-    label = "active cdc2-cyclin / CT" if observable == "M" else "total cyclin / CT"
+    label = "active cdc2-cyclin / CT" if observable == "M" else "YT / CT"
 
     fig, ax = plt.subplots(figsize=(7.2, 4.35))
     for rank, index in enumerate(middle_idx):
@@ -256,11 +261,59 @@ def plot_saved_single_phenotype(
     handles = [
         plt.Line2D([0], [0], color="#111111", lw=2.1, label="start"),
         plt.Line2D([0], [0], color="#777777", lw=1.2, label="intermediate"),
-        plt.Line2D([0], [0], color=color, lw=2.3, label=f"step {end}"),
+        plt.Line2D(
+            [0], [0], color=color, lw=2.3,
+            label=endpoint_label if endpoint_label is not None else f"step {end}",
+        ),
     ]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.12), ncol=3, frameon=False, fontsize=9)
     fig.tight_layout()
     stem = f"tyson_sloppy_walk_dir{walk_index + 1}_{observable.lower()}_step{end}_large"
+    for suffix in ("png", "pdf"):
+        fig.savefig(outdir / f"{stem}.{suffix}", dpi=300 if suffix == "png" else None, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_saved_single_walk_outputs(
+    data,
+    outdir: Path,
+    walk_index: int = 1,
+    final_step: int = 250,
+    snapshot_count: int = 9,
+    endpoint_label: str = "step 50",
+    color: str = "#E15759",
+) -> None:
+    """Plot M/CT and YT/CT side by side for one saved sloppy walk."""
+    t_eval = np.asarray(data["t"])
+    end = min(final_step, np.asarray(data[f"walk_{walk_index}_M"]).shape[0] - 1)
+    snapshot_idx = np.unique(
+        np.round(np.linspace(0, end, min(snapshot_count, end + 1))).astype(int)
+    )
+    middle_idx = [index for index in snapshot_idx if index not in (0, end)]
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 4.0), sharex=True)
+
+    for ax, observable, label in zip(axes, ("M", "YT"), ("M / CT", "YT / CT")):
+        trajectories = np.asarray(data[f"walk_{walk_index}_{observable}"])
+        for rank, index in enumerate(middle_idx):
+            shade = 0.80 - 0.40 * (rank / max(len(middle_idx) - 1, 1))
+            ax.plot(t_eval, trajectories[index], color=str(shade), lw=1.15, alpha=0.95, zorder=1)
+        ax.plot(t_eval, trajectories[0], color="#111111", lw=2.0, zorder=3)
+        ax.plot(t_eval, trajectories[end], color=color, lw=2.2, zorder=4)
+        ax.set_xlabel("time", fontsize=10)
+        ax.set_ylabel(label, fontsize=10)
+        ax.grid(True, color="#d8dadd", alpha=0.65, linewidth=0.7)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.tick_params(labelsize=9)
+
+    handles = [
+        plt.Line2D([0], [0], color="#111111", lw=2.0, label="start"),
+        plt.Line2D([0], [0], color="#777777", lw=1.15, label="intermediate"),
+        plt.Line2D([0], [0], color=color, lw=2.2, label=endpoint_label),
+    ]
+    fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=3, frameon=False, fontsize=9)
+    fig.tight_layout(rect=(0, 0, 1, 0.94), w_pad=2.2)
+    stem = f"tyson_sloppy_walk_dir{walk_index + 1}_m_yt_step{end}_large"
     for suffix in ("png", "pdf"):
         fig.savefig(outdir / f"{stem}.{suffix}", dpi=300 if suffix == "png" else None, bbox_inches="tight")
     plt.close(fig)
@@ -280,8 +333,14 @@ def main() -> None:
     top3 = plot_global_walks(log_walks, args.outdir)
     explained = plot_global_pca(log_walks, args.outdir)
     plot_four_views(log_walks, summary, args.outdir)
-    plot_saved_phenotypes(data, len(summary["walks"]), args.outdir, observable="YT", final_step=50)
-    plot_saved_single_phenotype(data, args.outdir, walk_index=1, observable="M", final_step=250)
+    plot_saved_phenotypes(
+        data, len(summary["walks"]), args.outdir,
+        observable="YT", final_step=50, endpoint_label="step 250",
+    )
+    plot_saved_single_walk_outputs(
+        data, args.outdir, walk_index=1, final_step=250,
+        endpoint_label="step 50", color="#E15759",
+    )
     print("Global axes:", ", ".join(PARAM_NAMES[i] for i in top3))
     print("PCA explained variance:", ", ".join(f"PC{i + 1}={100 * value:.2f}%" for i, value in enumerate(explained[:3])))
 
