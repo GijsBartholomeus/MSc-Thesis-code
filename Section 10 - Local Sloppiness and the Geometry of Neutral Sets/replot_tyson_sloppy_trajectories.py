@@ -10,7 +10,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
+from matplotlib.colors import LinearSegmentedColormap, Normalize
 import numpy as np
 
 from make_tyson_sloppy_multiwalk_figures import PARAM_LABELS, PARAM_NAMES
@@ -319,6 +319,60 @@ def plot_saved_single_walk_outputs(
     plt.close(fig)
 
 
+def plot_saved_single_walk_outputs_viridis(
+    data,
+    outdir: Path,
+    walk_index: int = 0,
+    final_step: int = 50,
+    snapshot_count: int = 9,
+) -> None:
+    """Plot two outputs with trajectory colour progressing through viridis."""
+    t_eval = np.asarray(data["t"])
+    end = min(final_step, np.asarray(data[f"walk_{walk_index}_M"]).shape[0] - 1)
+    snapshot_idx = np.unique(
+        np.round(np.linspace(0, end, min(snapshot_count, end + 1))).astype(int)
+    )
+    norm = Normalize(0, end)
+    viridis = plt.get_cmap("viridis")
+    cmap = LinearSegmentedColormap.from_list(
+        "viridis_purple_green", viridis(np.linspace(0.03, 0.78, 256))
+    )
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 4.0), sharex=True)
+
+    for ax, observable, label in zip(axes, ("M", "YT"), ("M / CT", "YT / CT")):
+        trajectories = np.asarray(data[f"walk_{walk_index}_{observable}"])
+        for index in snapshot_idx:
+            is_endpoint = index in (0, end)
+            ax.plot(
+                t_eval,
+                trajectories[index],
+                color=cmap(norm(index)),
+                lw=2.15 if is_endpoint else 1.25,
+                alpha=1.0 if is_endpoint else 0.88,
+                zorder=3 if is_endpoint else 1,
+            )
+        ax.set_xlabel("time", fontsize=10)
+        ax.set_ylabel(label, fontsize=10)
+        ax.grid(True, color="#d8dadd", alpha=0.65, linewidth=0.7)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.tick_params(labelsize=9)
+
+    scalar = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+    scalar.set_array([])
+    cax = fig.add_axes([0.35, 0.04, 0.30, 0.022])
+    cbar = fig.colorbar(scalar, cax=cax, orientation="horizontal")
+    cbar.set_label("walk step", fontsize=9, labelpad=2)
+    cbar.set_ticks(np.linspace(0, end, 6, dtype=int))
+    cbar.ax.tick_params(labelsize=8, length=2.5, pad=2)
+    cbar.outline.set_linewidth(0.55)
+    fig.subplots_adjust(left=0.08, right=0.99, bottom=0.20, top=0.98, wspace=0.24)
+    stem = f"tyson_sloppy_walk_dir{walk_index + 1}_m_yt_step{end}_viridis"
+    for suffix in ("png", "pdf"):
+        fig.savefig(outdir / f"{stem}.{suffix}", dpi=300 if suffix == "png" else None, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=Path, required=True)
@@ -340,6 +394,9 @@ def main() -> None:
     plot_saved_single_walk_outputs(
         data, args.outdir, walk_index=1, final_step=250,
         endpoint_label="step 50", color="#E15759",
+    )
+    plot_saved_single_walk_outputs_viridis(
+        data, args.outdir, walk_index=1, final_step=250,
     )
     print("Global axes:", ", ".join(PARAM_NAMES[i] for i in top3))
     print("PCA explained variance:", ", ".join(f"PC{i + 1}={100 * value:.2f}%" for i, value in enumerate(explained[:3])))
